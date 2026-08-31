@@ -112,19 +112,24 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     Route::resource('certificates', CertificateController::class);
     Route::get('certificates/{id}/print', [CertificateController::class, 'print'])->name('certificates.print');
 
-    // Enquiries / Leads CRM
-    Route::resource('enquiries', EnquiryController::class);
-    Route::post('enquiries/{id}/follow-ups', [EnquiryController::class, 'addFollowUp'])->name('enquiries.follow-ups.store');
-    Route::post('enquiries/{id}/status', [EnquiryController::class, 'updateStatus'])->name('enquiries.status.update');
-
-    // Trainers
-    Route::resource('trainers', TrainerController::class);
-
     // Employees & Departments
     Route::resource('employees', EmployeeController::class);
     Route::get('departments', [DepartmentController::class, 'index'])->name('departments.index');
     Route::post('departments', [DepartmentController::class, 'storeDepartment'])->name('departments.store');
+    Route::delete('departments/{id}', [DepartmentController::class, 'destroy'])->name('departments.destroy');
     Route::post('designations', [DepartmentController::class, 'storeDesignation'])->name('designations.store');
+    Route::delete('designations/{id}', [DepartmentController::class, 'destroyDesignation'])->name('designations.destroy');
+
+    // Trainers
+    Route::resource('trainers', TrainerController::class);
+
+    // Enquiries / Leads CRM
+    Route::resource('enquiries', EnquiryController::class);
+    Route::post('enquiries/{id}/convert', [EnquiryController::class, 'convertToStudent'])->name('enquiries.convert');
+    Route::post('enquiries/{id}/follow-ups', [EnquiryController::class, 'addFollowUp'])->name('enquiries.follow-ups.store');
+    Route::post('enquiries/{id}/followup', [EnquiryController::class, 'addFollowUp'])->name('enquiries.followup.store');
+    Route::post('enquiries/{id}/status', [EnquiryController::class, 'updateStatus'])->name('enquiries.status.update');
+    Route::post('enquiries/{id}/update-status', [EnquiryController::class, 'updateStatus'])->name('enquiries.update-status');
 
     // Reports
     Route::get('reports/fees', [ReportController::class, 'feesReport'])->name('reports.fees');
@@ -134,20 +139,26 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     // CMS & Website Management
     Route::get('cms/testimonials', [CmsController::class, 'testimonials'])->name('cms.testimonials');
     Route::post('cms/testimonials', [CmsController::class, 'storeTestimonial'])->name('cms.testimonials.store');
-    Route::delete('cms/testimonials/{id}', [CmsController::class, 'deleteTestimonial'])->name('cms.testimonials.delete');
+    Route::delete('cms/testimonials/{id}', [CmsController::class, 'deleteTestimonial'])->name('cms.testimonials.destroy');
+    Route::delete('cms/testimonials/{id}/delete', [CmsController::class, 'deleteTestimonial'])->name('cms.testimonials.delete');
 
     Route::get('cms/gallery', [CmsController::class, 'gallery'])->name('cms.gallery');
     Route::post('cms/gallery', [CmsController::class, 'storeGalleryImage'])->name('cms.gallery.store');
-    Route::delete('cms/gallery/{id}', [CmsController::class, 'deleteGalleryImage'])->name('cms.gallery.delete');
+    Route::delete('cms/gallery/{id}', [CmsController::class, 'deleteGalleryImage'])->name('cms.gallery.destroy');
+    Route::delete('cms/gallery/{id}/delete', [CmsController::class, 'deleteGalleryImage'])->name('cms.gallery.delete');
 
     Route::get('cms/faqs', [CmsController::class, 'faqs'])->name('cms.faqs');
     Route::post('cms/faqs', [CmsController::class, 'storeFaq'])->name('cms.faqs.store');
-    Route::delete('cms/faqs/{id}', [CmsController::class, 'deleteFaq'])->name('cms.faqs.delete');
+    Route::delete('cms/faqs/{id}', [CmsController::class, 'deleteFaq'])->name('cms.faqs.destroy');
+    Route::delete('cms/faqs/{id}/delete', [CmsController::class, 'deleteFaq'])->name('cms.faqs.delete');
 
     Route::get('cms/blogs', [CmsController::class, 'blogs'])->name('cms.blogs');
     Route::get('cms/blogs/create', [CmsController::class, 'createBlog'])->name('cms.blogs.create');
     Route::post('cms/blogs', [CmsController::class, 'storeBlog'])->name('cms.blogs.store');
-    Route::delete('cms/blogs/{id}', [CmsController::class, 'deleteBlog'])->name('cms.blogs.delete');
+    Route::get('cms/blogs/{id}/edit', [CmsController::class, 'editBlog'])->name('cms.blogs.edit');
+    Route::put('cms/blogs/{id}', [CmsController::class, 'updateBlog'])->name('cms.blogs.update');
+    Route::delete('cms/blogs/{id}', [CmsController::class, 'deleteBlog'])->name('cms.blogs.destroy');
+    Route::delete('cms/blogs/{id}/delete', [CmsController::class, 'deleteBlog'])->name('cms.blogs.delete');
 
     Route::get('cms/contact-messages', [CmsController::class, 'contactMessages'])->name('cms.contact-messages');
     Route::post('cms/contact-messages/{id}/read', [CmsController::class, 'markMessageRead'])->name('cms.contact-messages.read');
@@ -159,6 +170,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
     // Users & Roles (Super Admin / Admin only)
     Route::resource('users', UserController::class);
     Route::resource('roles', RoleController::class);
+    Route::post('roles/{id}/permissions', [RoleController::class, 'updatePermissions'])->name('roles.permissions.update');
 
     // Audit Logs
     Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');

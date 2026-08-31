@@ -15,7 +15,7 @@ class RoleController extends Controller
     public function index(): View
     {
         $roles = Role::with('permissions')->withCount('users')->get();
-        $permissions = Permission::all()->groupBy('group');
+        $permissions = Permission::all();
 
         return view('admin.roles.index', compact('roles', 'permissions'));
     }
@@ -47,22 +47,32 @@ class RoleController extends Controller
         $role = Role::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:100|unique:roles,name,' . $role->id,
+            'name' => 'nullable|string|max:100|unique:roles,name,' . $role->id,
             'description' => 'nullable|string|max:255',
             'permissions' => 'nullable|array',
         ]);
 
-        if (!$role->is_system) {
+        if (isset($validated['name']) && !$role->is_system) {
             $role->name = $validated['name'];
             $role->slug = Str::slug($validated['name']);
         }
 
-        $role->description = $validated['description'] ?? null;
+        if (isset($validated['description'])) {
+            $role->description = $validated['description'];
+        }
         $role->save();
 
-        if (isset($validated['permissions'])) {
-            $role->permissions()->sync($validated['permissions']);
+        if ($request->has('permissions')) {
+            $role->permissions()->sync($request->input('permissions', []));
         }
+
+        return back()->with('success', 'Role updated successfully.');
+    }
+
+    public function updatePermissions(Request $request, int $id): RedirectResponse
+    {
+        $role = Role::findOrFail($id);
+        $role->permissions()->sync($request->input('permissions', []));
 
         return back()->with('success', 'Role permissions updated successfully.');
     }

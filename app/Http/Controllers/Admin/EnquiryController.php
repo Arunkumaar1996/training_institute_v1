@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\Enquiry;
 use App\Models\FollowUp;
 use App\Models\LeadSource;
+use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -99,50 +100,86 @@ class EnquiryController extends Controller
     {
         $enquiry = Enquiry::findOrFail($id);
 
-        $validated = $request->validate([
-            'notes' => 'required|string',
-            'status' => 'required|string|in:New,Contacted,Interested,Follow-up,Converted,Not Interested,Closed',
-            'next_follow_up_date' => 'nullable|date',
-            'next_follow_up_time' => 'nullable',
-        ]);
+        $notes = $request->input('remarks') ?? $request->input('notes') ?? 'Follow-up logged';
+        $status = $request->input('status') ?? ($request->input('response') === 'Positive' ? 'Interested' : 'Follow-up');
+        $nextDate = $request->input('next_follow_up') ?? $request->input('next_follow_up_date');
+        $nextTime = $request->input('next_follow_up_time');
 
         FollowUp::create([
             'enquiry_id' => $enquiry->id,
             'user_id' => auth()->id(),
             'follow_up_date' => now()->toDateString(),
             'follow_up_time' => now()->toTimeString(),
-            'notes' => $validated['notes'],
-            'status' => $validated['status'],
-            'next_follow_up_date' => $validated['next_follow_up_date'] ?? null,
-            'next_follow_up_time' => $validated['next_follow_up_time'] ?? null,
+            'notes' => $notes,
+            'status' => $status,
+            'next_follow_up_date' => $nextDate,
+            'next_follow_up_time' => $nextTime,
         ]);
 
         $enquiry->update([
-            'status' => $validated['status'],
-            'follow_up_date' => $validated['next_follow_up_date'] ?? $enquiry->follow_up_date,
+            'status' => $status,
+            'follow_up_date' => $nextDate ?? $enquiry->follow_up_date,
         ]);
 
-        ActivityLog::log('updated', 'Enquiry', $enquiry->id, "Follow-up added for Enquiry #{$enquiry->enquiry_code}, status changed to {$validated['status']}");
+        ActivityLog::log('updated', 'Enquiry', $enquiry->id, "Follow-up added for Enquiry #{$enquiry->enquiry_code}, status changed to {$status}");
 
         return back()->with('success', 'Follow-up recorded successfully.');
     }
 
-    public function updateStatus(Request $request, int $id): JsonResponse
+    public function updateStatus(Request $request, int $id): JsonResponse|RedirectResponse
     {
         $enquiry = Enquiry::findOrFail($id);
         $status = $request->input('status');
 
-        $validStatuses = ['New', 'Contacted', 'Interested', 'Follow-up', 'Converted', 'Not Interested', 'Closed'];
-        if (!in_array($status, $validStatuses)) {
-            return response()->json(['success' => false, 'message' => 'Invalid status.'], 422);
+        $validStatuses = ['New', 'Contacted', 'Interested', 'Follow-up', 'Demo Scheduled', 'Converted', 'Not Interested', 'Closed', 'Closed / Lost'];
+        if ($status && in_array($status, $validStatuses)) {
+            $enquiry->status = $status;
+            $enquiry->save();
+            ActivityLog::log('updated', 'Enquiry', $enquiry->id, "Enquiry #{$enquiry->enquiry_code} status changed to {$status}");
         }
 
-        $enquiry->status = $status;
-        $enquiry->save();
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(['success' => true, 'status' => $status]);
+        }
 
-        ActivityLog::log('updated', 'Enquiry', $enquiry->id, "Enquiry #{$enquiry->enquiry_code} status changed to {$status}");
+        return back()->with('success', "Enquiry status updated to {$status}.");
+    }
 
-        return response()->json(['success' => true, 'status' => $status]);
+    public function convertToStudent(int $id): RedirectResponse
+    {
+        $enquiry = Enquiry::findOrFail($id);
+
+        $student = Student::where('mobile', $enquiry->mobile)
+            ->orWhere(function ($q) use ($enquiry) {
+                if ($enquiry->email) {
+                    $q->where('email', $enquiry->email);
+                }
+            })->first();
+
+        if (!$student) {
+            $year = date('Y');
+            $studentCode = 'STU-' . $year . '-' . strtoupper(Str::random(5));
+            $nameParts = explode(' ', trim($enquiry->name), 2);
+            $firstName = $nameParts[0];
+            $lastName = $nameParts[1] ?? '';
+
+            $student = Student::create([
+                'student_code' => $studentCode,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'email' => $enquiry->email,
+                'mobile' => $enquiry->mobile,
+                'status' => 'active',
+            ]);
+        }
+
+        $enquiry->update([
+            'status' => 'Converted',
+        ]);
+
+        ActivityLog::log('converted', 'Enquiry', $enquiry->id, "Enquiry #{$enquiry->enquiry_code} converted to Student {$student->student_code}");
+
+        return redirect()->route('admin.students.show', $student->id)->with('success', "Enquiry successfully converted to Student ({$student->student_code}).");
     }
 
     public function destroy(int $id): RedirectResponse

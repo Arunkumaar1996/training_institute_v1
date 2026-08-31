@@ -69,6 +69,10 @@ class CmsController extends Controller
 
     public function storeGalleryImage(Request $request, FileStorageService $fileStorage): RedirectResponse
     {
+        if ($request->has('category_id') && !$request->has('gallery_category_id')) {
+            $request->merge(['gallery_category_id' => $request->category_id]);
+        }
+
         $validated = $request->validate([
             'gallery_category_id' => 'nullable|exists:gallery_categories,id',
             'title' => 'required|string|max:100',
@@ -132,6 +136,10 @@ class CmsController extends Controller
 
     public function storeBlog(Request $request, FileStorageService $fileStorage): RedirectResponse
     {
+        if ($request->has('category_id') && !$request->has('blog_category_id')) {
+            $request->merge(['blog_category_id' => $request->category_id]);
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:200',
             'blog_category_id' => 'nullable|exists:blog_categories,id',
@@ -154,6 +162,41 @@ class CmsController extends Controller
 
         Blog::create($validated);
         return redirect()->route('admin.cms.blogs')->with('success', 'Blog article published successfully.');
+    }
+
+    public function editBlog(int $id): View
+    {
+        $blog = Blog::findOrFail($id);
+        $categories = BlogCategory::where('status', true)->get();
+        return view('admin.cms.blogs.edit', compact('blog', 'categories'));
+    }
+
+    public function updateBlog(Request $request, int $id, FileStorageService $fileStorage): RedirectResponse
+    {
+        $blog = Blog::findOrFail($id);
+
+        if ($request->has('category_id') && !$request->has('blog_category_id')) {
+            $request->merge(['blog_category_id' => $request->category_id]);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:200',
+            'blog_category_id' => 'nullable|exists:blog_categories,id',
+            'excerpt' => 'nullable|string|max:300',
+            'content' => 'required|string',
+            'tags' => 'nullable|string|max:200',
+            'status' => 'required|string|in:published,draft,scheduled',
+            'seo_title' => 'nullable|string|max:150',
+            'seo_description' => 'nullable|string|max:300',
+            'featured_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ]);
+
+        if ($request->hasFile('featured_image')) {
+            $validated['featured_image'] = $fileStorage->uploadImage($request->file('featured_image'), 'uploads/blogs');
+        }
+
+        $blog->update($validated);
+        return redirect()->route('admin.cms.blogs')->with('success', 'Blog article updated successfully.');
     }
 
     public function deleteBlog(int $id): RedirectResponse

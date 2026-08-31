@@ -41,11 +41,12 @@ class ReportController extends Controller
             return $this->exportPaymentsCsv($query->get());
         }
 
+        $totalCollected = (clone $query)->sum('amount');
+        $totalAmount = $totalCollected;
         $payments = $query->orderByDesc('payment_date')->paginate(20)->withQueryString();
         $courses = Course::where('status', 'active')->get();
-        $totalAmount = $query->sum('amount');
 
-        return view('admin.reports.fees', compact('payments', 'courses', 'startDate', 'endDate', 'courseId', 'paymentMethod', 'totalAmount'));
+        return view('admin.reports.fees', compact('payments', 'courses', 'startDate', 'endDate', 'courseId', 'paymentMethod', 'totalAmount', 'totalCollected'));
     }
 
     public function admissionsReport(Request $request): View
@@ -61,11 +62,11 @@ class ReportController extends Controller
             $query->where('course_id', $courseId);
         }
 
+        $totalFees = (clone $query)->sum('final_fee');
+        $totalPaid = (clone $query)->sum('total_paid');
+        $totalBalance = (clone $query)->sum('balance');
         $admissions = $query->orderByDesc('admission_date')->paginate(20)->withQueryString();
         $courses = Course::where('status', 'active')->get();
-        $totalFees = $query->sum('final_fee');
-        $totalPaid = $query->sum('total_paid');
-        $totalBalance = $query->sum('balance');
 
         return view('admin.reports.admissions', compact('admissions', 'courses', 'startDate', 'endDate', 'courseId', 'totalFees', 'totalPaid', 'totalBalance'));
     }
@@ -75,19 +76,40 @@ class ReportController extends Controller
         $startDate = $request->query('start_date', now()->startOfMonth()->toDateString());
         $endDate = $request->query('end_date', now()->toDateString());
 
-        $enquiries = Enquiry::with(['course', 'leadSource'])
+        $enquiries = Enquiry::with(['course', 'leadSource', 'source'])
             ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
             ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString();
 
-        $statusCounts = Enquiry::whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
-            ->selectRaw('status, count(*) as count')
-            ->groupBy('status')
-            ->pluck('count', 'status')
-            ->toArray();
+        $totalEnquiries = Enquiry::whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])->count();
+        $convertedEnquiries = Enquiry::whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])->where('status', 'Converted')->count();
+        $conversionRate = $totalEnquiries > 0 ? round(($convertedEnquiries / $totalEnquiries) * 100, 1) : 0;
 
-        return view('admin.reports.leads', compact('enquiries', 'startDate', 'endDate', 'statusCounts'));
+        $bySource = Enquiry::whereBetween('enquiries.created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->leftJoin('lead_sources', 'enquiries.lead_source_id', '=', 'lead_sources.id')
+            ->selectRaw('lead_sources.name as source_name, count(enquiries.id) as total')
+            ->groupBy('lead_sources.name')
+            ->get();
+
+        $byStatus = Enquiry::whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->get();
+
+        $statusCounts = $byStatus->pluck('total', 'status')->toArray();
+
+        return view('admin.reports.leads', compact(
+            'enquiries',
+            'startDate',
+            'endDate',
+            'totalEnquiries',
+            'convertedEnquiries',
+            'conversionRate',
+            'bySource',
+            'byStatus',
+            'statusCounts'
+        ));
     }
 
     protected function exportPaymentsCsv($payments): StreamedResponse

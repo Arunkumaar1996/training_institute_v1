@@ -47,4 +47,21 @@ class DepartmentController extends Controller
 
         return back()->with('success', 'Designation created successfully.');
     }
+
+    public function destroy(int $id): RedirectResponse
+    {
+        $department = Department::findOrFail($id);
+        $department->delete();
+
+        return back()->with('success', 'Department deleted successfully.');
+    }
+
+    public function destroyDesignation(int $id): RedirectResponse
+    {
+        $designation = Designation::findOrFail($id);
+        $designation->delete();
+
+        return back()->with('success', 'Designation deleted successfully.');
+    }
 }
+
